@@ -10,71 +10,51 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+    @Query private var accounts: [Account]
+    @Query private var transactions: [Transaction]
+    @Query private var buckets: [Bucket]
 
     var body: some View {
-        NavigationViewWrapper {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
+        NavigationStack {
+            VStack(spacing: 16) {
+                Image(systemName: "wallet.pass")
+                    .font(.system(size: 56))
+                    .foregroundStyle(.tint)
+                Text("Budget")
+                    .font(.largeTitle.bold())
+                Text("Schema online.")
+                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Accounts: \(accounts.count)")
+                    Text("Transactions: \(transactions.count)")
+                    Text("Buckets: \(buckets.count)")
                 }
-                .onDelete(perform: deleteItems)
+                .font(.callout.monospaced())
+                .padding()
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
             }
-#if os(macOS)
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-#endif
-            .toolbar {
-#if os(iOS)
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-#endif
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
+            .padding()
+            .navigationTitle("Budget")
         }
-    }
-
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
-        }
-    }
-}
-
-fileprivate struct NavigationViewWrapper<Content: View>: View {
-    let content: () -> Content
-
-    var body: some View {
-#if os(macOS)
-        NavigationSplitView {
-            content()
-        } detail: {
-            Text("Select an item")
-        }
-#else
-        content()
-#endif
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+        .modelContainer(for: [
+            Account.self,
+            Category.self,
+            CategoryKeyword.self,
+            CategoryAlias.self,
+            Tag.self,
+            Transaction.self,
+            TransactionAudit.self,
+            Bucket.self,
+            Allocation.self,
+            BucketPeriod.self,
+            Plan.self,
+            PlanInstance.self,
+            Loan.self,
+        ], inMemory: true)
 }

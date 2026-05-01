@@ -10,12 +10,26 @@ import SwiftData
 
 @main
 struct BudgetApp: App {
-    var sharedModelContainer: ModelContainer = {
+    let sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Account.self,
+            Category.self,
+            CategoryKeyword.self,
+            CategoryAlias.self,
+            Tag.self,
+            Transaction.self,
+            TransactionAudit.self,
+            Bucket.self,
+            Allocation.self,
+            BucketPeriod.self,
+            Plan.self,
+            PlanInstance.self,
+            Loan.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false
+        )
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
