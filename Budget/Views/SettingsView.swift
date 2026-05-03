@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 /// Settings tab — account, learned aliases (review/edit/delete), categories.
 /// Per design, this is the smallest surface — most settings are minor.
@@ -19,6 +20,9 @@ struct SettingsView: View {
     private var loans: [Loan]
 
     @State private var showingResetConfirm = false
+    @State private var showingExporter = false
+    @State private var exportContent = ""
+    @State private var exportError: String? = nil
 
     var body: some View {
         Form {
@@ -87,6 +91,20 @@ struct SettingsView: View {
                 }
             }
 
+            // ─── Export ───
+            Section {
+                Button {
+                    prepareExport()
+                } label: {
+                    Label("Export to Postgres (.sql)", systemImage: "square.and.arrow.up")
+                }
+            } header: {
+                Text("Export")
+            } footer: {
+                Text("Generates a re-runnable Postgres SQL dump (CREATE TABLE + INSERTs). Run with `psql -f budget_export.sql` against your local DB.")
+                    .font(.caption)
+            }
+
             // ─── Danger zone ───
             Section {
                 Button(role: .destructive) {
@@ -111,6 +129,35 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This can't be undone.")
+        }
+        .fileExporter(
+            isPresented: $showingExporter,
+            document: SQLExportDocument(content: exportContent),
+            contentType: .text,
+            defaultFilename: "budget_export"
+        ) { result in
+            if case .failure(let err) = result {
+                exportError = err.localizedDescription
+            }
+        }
+        .alert("Export error",
+               isPresented: Binding(
+                   get: { exportError != nil },
+                   set: { if !$0 { exportError = nil } }
+               )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportError ?? "")
+        }
+    }
+
+    private func prepareExport() {
+        let service = ExportService(context: context)
+        do {
+            exportContent = try service.generatePostgresDump()
+            showingExporter = true
+        } catch {
+            exportError = error.localizedDescription
         }
     }
 
