@@ -9,33 +9,42 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var accounts: [Account]
-    @Query private var transactions: [Transaction]
-    @Query private var buckets: [Bucket]
-
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                Image(systemName: "wallet.pass")
-                    .font(.system(size: 56))
-                    .foregroundStyle(.tint)
-                Text("Budget")
-                    .font(.largeTitle.bold())
-                Text("Schema online.")
-                    .foregroundStyle(.secondary)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Accounts: \(accounts.count)")
-                    Text("Transactions: \(transactions.count)")
-                    Text("Buckets: \(buckets.count)")
-                }
-                .font(.callout.monospaced())
-                .padding()
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        TabView {
+            NavigationStack {
+                ChatView()
             }
-            .padding()
-            .navigationTitle("Budget")
+            .tabItem {
+                Label("Chat", systemImage: "bubble.left.and.bubble.right.fill")
+            }
+
+            NavigationStack {
+                BucketsView()
+            }
+            .tabItem {
+                Label("Plan", systemImage: "rectangle.grid.2x2.fill")
+            }
+
+            NavigationStack {
+                GoalsView()
+            }
+            .tabItem {
+                Label("Goals", systemImage: "target")
+            }
+
+            NavigationStack {
+                ReportsView()
+            }
+            .tabItem {
+                Label("Reports", systemImage: "chart.pie.fill")
+            }
+
+            NavigationStack {
+                SettingsView()
+            }
+            .tabItem {
+                Label("Settings", systemImage: "gearshape.fill")
+            }
         }
     }
 }
