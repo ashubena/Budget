@@ -10,9 +10,31 @@ enum SeedData {
         do {
             try seedAccountIfNeeded(context: context)
             try seedCategoriesIfNeeded(context: context)
+            try ensureDefaultKeywords(context: context)   // idempotent — heals older installs
             try context.save()
         } catch {
             print("[SeedData] error: \(error)")
+        }
+    }
+
+    /// Ensures every default keyword exists for any default category that still
+    /// exists. Safe to run on every launch; only inserts what's missing.
+    /// Catches users whose first-launch seed predated a keyword being added.
+    private static func ensureDefaultKeywords(context: ModelContext) throws {
+        let allCats = try context.fetch(FetchDescriptor<Category>())
+        let catByName = Dictionary(grouping: allCats, by: { $0.name.lowercased() })
+            .compactMapValues(\.first)
+        let existingKeywords = try context.fetch(FetchDescriptor<CategoryKeyword>())
+        let existingKwSet = Set(existingKeywords.map(\.keyword))
+
+        for seed in categoryDefaults {
+            guard let cat = catByName[seed.name.lowercased()] else { continue }
+            for kw in seed.keywords {
+                let lower = kw.lowercased()
+                if !existingKwSet.contains(lower) {
+                    context.insert(CategoryKeyword(keyword: lower, category: cat, isStrong: true))
+                }
+            }
         }
     }
 

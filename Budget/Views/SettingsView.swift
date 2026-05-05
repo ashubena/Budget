@@ -77,18 +77,27 @@ struct SettingsView: View {
             }
 
             // ─── Categories ───
-            Section("Categories") {
+            Section {
                 ForEach(categories) { cat in
-                    HStack {
-                        Image(systemName: cat.kind == .income ? "arrow.down.circle" : "arrow.up.circle")
-                            .foregroundStyle(cat.kind == .income ? Color.green : Color.secondary)
-                        Text(cat.name)
-                        Spacer()
-                        Text("\(cat.transactions?.count ?? 0)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    NavigationLink {
+                        CategoryEditView(category: cat)
+                    } label: {
+                        HStack {
+                            Image(systemName: cat.kind == .income ? "arrow.down.circle" : "arrow.up.circle")
+                                .foregroundStyle(cat.kind == .income ? Color.green : Color.secondary)
+                            Text(cat.name)
+                            Spacer()
+                            Text("\(cat.transactions?.count ?? 0)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
+            } header: {
+                Text("Categories")
+            } footer: {
+                Text("Tap to edit name, manage keywords, or delete.")
+                    .font(.caption)
             }
 
             // ─── Export ───

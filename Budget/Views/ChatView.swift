@@ -14,10 +14,15 @@ struct ChatView: View {
 
     @State private var input: String = ""
     @State private var messages: [ChatMessage] = []
-    @State private var pendingCategoryFragment: String? = nil
-    @State private var pendingTransactionID: UUID? = nil
+    @State private var pendingCategoryRequest: PendingCategoryRequest? = nil
 
     @FocusState private var inputFocused: Bool
+
+    struct PendingCategoryRequest: Identifiable {
+        let id = UUID()
+        let fragment: String
+        let transactionID: UUID
+    }
 
     #if os(iOS)
     @State private var speech = SpeechService()
@@ -35,6 +40,18 @@ struct ChatView: View {
             if messages.isEmpty {
                 messages.append(.system("Hi. Try “500 food”, “got 80000 salary”, or “lent ahmed 5000”."))
             }
+        }
+        .sheet(item: $pendingCategoryRequest) { request in
+            CategoryPickerSheet(
+                unresolvedFragment: request.fragment,
+                transactionID: request.transactionID,
+                onAssigned: { cat in
+                    messages.append(.system("Got it. \"\(request.fragment)\" → \(cat.name) (will remember)."))
+                },
+                onSkipped: {
+                    messages.append(.system("Skipped. The transaction is logged without a category — you can fix it under Settings → Recent transactions."))
+                }
+            )
         }
     }
 
@@ -92,7 +109,6 @@ struct ChatView: View {
         #if os(iOS)
         if speech.isRecording { return "Listening…" }
         #endif
-        if pendingCategoryFragment != nil { return "Reply with a category…" }
         return "e.g. 500 food"
     }
 
@@ -146,11 +162,6 @@ struct ChatView: View {
         input = ""
         messages.append(.user(text))
 
-        if let fragment = pendingCategoryFragment, let txnID = pendingTransactionID {
-            handleCategoryClarification(text, originalFragment: fragment, transactionID: txnID)
-            return
-        }
-
         do {
             let parsed = try Parser.parse(text)
             let service = TransactionService(context: context)
@@ -160,58 +171,18 @@ struct ChatView: View {
                 responseMessage += "\n📅 dated: \(phrase)"
             }
             messages.append(.system(responseMessage))
-            if logResult.needsCategoryFollowUp {
-                pendingCategoryFragment = logResult.unresolvedFragment
-                pendingTransactionID = logResult.transactionID
+            if logResult.needsCategoryFollowUp,
+               let txnID = logResult.transactionID,
+               let fragment = logResult.unresolvedFragment {
+                pendingCategoryRequest = PendingCategoryRequest(
+                    fragment: fragment,
+                    transactionID: txnID
+                )
             }
         } catch let err as ParserError {
             messages.append(.system(err.localizedDescription))
         } catch {
             messages.append(.system("Couldn't log that: \(error.localizedDescription)"))
-        }
-    }
-
-    // MARK: - Category clarification
-
-    private func handleCategoryClarification(_ reply: String, originalFragment: String, transactionID: UUID) {
-        let categoryName = reply.trimmingCharacters(in: .whitespacesAndNewlines)
-        defer {
-            pendingCategoryFragment = nil
-            pendingTransactionID = nil
-        }
-
-        do {
-            let target = categoryName.lowercased()
-            let allCats = try context.fetch(FetchDescriptor<Category>())
-            let category: Category
-            if let existing = allCats.first(where: { $0.name.lowercased() == target }) {
-                category = existing
-            } else {
-                category = Category(name: categoryName, kind: .expense)
-                context.insert(category)
-            }
-
-            let txID = transactionID
-            let txns = try context.fetch(
-                FetchDescriptor<Transaction>(predicate: #Predicate { $0.id == txID })
-            )
-            guard let txn = txns.first else {
-                messages.append(.system("Hmm, couldn't find that transaction to update."))
-                return
-            }
-            txn.category = category
-            txn.needsCategory = false
-
-            context.insert(CategoryAlias(
-                alias: originalFragment,
-                category: category,
-                source: .learned
-            ))
-
-            try context.save()
-            messages.append(.system("Got it. \"\(originalFragment)\" → \(category.name) (will remember)."))
-        } catch {
-            messages.append(.system("Couldn't save that: \(error.localizedDescription)"))
         }
     }
 }
