@@ -124,7 +124,10 @@ struct EditTransactionSheet: View {
 
     let transaction: Transaction
 
+    @Query(sort: \Category.name) private var allCategories: [Category]
+
     @State private var amountText: String = ""
+    @State private var selectedCategoryID: UUID? = nil
     @State private var error: String? = nil
 
     private var isOutsideWindow: Bool {
@@ -135,11 +138,41 @@ struct EditTransactionSheet: View {
         Parser.parseAmountToken(amountText.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    /// Match category options to direction: outflow → expense, inflow → income.
+    private var pickableCategories: [Category] {
+        let kind: CategoryKind = (transaction.direction == .inflow) ? .income : .expense
+        return allCategories.filter { $0.kind == kind }
+    }
+
+    private var amountChanged: Bool {
+        guard let p = parsedAmount else { return false }
+        return p != transaction.amount
+    }
+
+    private var categoryChanged: Bool {
+        selectedCategoryID != transaction.category?.id
+    }
+
+    private var canSave: Bool {
+        guard !isOutsideWindow else { return false }
+        if amountChanged { return parsedAmount != nil }
+        return categoryChanged
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    LabeledContent("Category", value: transaction.category?.name ?? "—")
+                    if isOutsideWindow {
+                        LabeledContent("Category", value: transaction.category?.name ?? "—")
+                    } else {
+                        Picker("Category", selection: $selectedCategoryID) {
+                            Text("(uncategorized)").tag(UUID?.none)
+                            ForEach(pickableCategories) { cat in
+                                Text(cat.name).tag(Optional(cat.id))
+                            }
+                        }
+                    }
                     LabeledContent("Date",
                                    value: transaction.occurredAt.formatted(date: .abbreviated, time: .shortened))
                     LabeledContent("Direction", value: transaction.direction.rawValue)
@@ -169,24 +202,7 @@ struct EditTransactionSheet: View {
                     }
                 }
 
-                let audits = (transaction.auditEntries ?? [])
-                    .sorted(by: { $0.changedAt > $1.changedAt })
-                if !audits.isEmpty {
-                    Section("History") {
-                        ForEach(audits) { a in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(a.changeType.rawValue) · \(a.fieldChanged ?? "")")
-                                    .font(.caption.weight(.semibold))
-                                if let old = a.oldValue, let new = a.newValue {
-                                    Text("\(old) → \(new)").font(.caption2)
-                                }
-                                Text(a.changedAt.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
+                auditSection
             }
             .navigationTitle("Transaction")
             #if os(iOS)
@@ -199,21 +215,54 @@ struct EditTransactionSheet: View {
                 if !isOutsideWindow {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Save") { save() }
-                            .disabled(parsedAmount == nil || parsedAmount == transaction.amount)
+                            .disabled(!canSave)
                     }
                 }
             }
             .onAppear {
                 amountText = "\(transaction.amount)"
+                selectedCategoryID = transaction.category?.id
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 420, idealWidth: 480, minHeight: 520, idealHeight: 600)
+        #endif
+    }
+
+    @ViewBuilder
+    private var auditSection: some View {
+        let audits = (transaction.auditEntries ?? [])
+            .sorted(by: { $0.changedAt > $1.changedAt })
+        if !audits.isEmpty {
+            Section("History") {
+                ForEach(audits) { a in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(a.changeType.rawValue) · \(a.fieldChanged ?? "")")
+                            .font(.caption.weight(.semibold))
+                        if let old = a.oldValue, let new = a.newValue {
+                            Text("\(old) → \(new)").font(.caption2)
+                        }
+                        Text(a.changedAt.formatted(date: .abbreviated, time: .shortened))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }
 
     private func save() {
-        guard let newAmount = parsedAmount else { return }
         let editor = EditService(context: context)
         do {
-            try editor.updateAmount(of: transaction, to: newAmount)
+            if categoryChanged {
+                let newCat: Category? = selectedCategoryID.flatMap { id in
+                    allCategories.first(where: { $0.id == id })
+                }
+                try editor.updateCategory(of: transaction, to: newCat)
+            }
+            if amountChanged, let newAmount = parsedAmount {
+                try editor.updateAmount(of: transaction, to: newAmount)
+            }
             dismiss()
         } catch {
             self.error = error.localizedDescription

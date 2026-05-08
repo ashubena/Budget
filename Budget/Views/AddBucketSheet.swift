@@ -73,6 +73,9 @@ struct AddBucketSheet: View {
                 }
             }
         }
+        #if os(macOS)
+        .frame(minWidth: 420, idealWidth: 480, minHeight: 480, idealHeight: 560)
+        #endif
     }
 
     // MARK: - Sections

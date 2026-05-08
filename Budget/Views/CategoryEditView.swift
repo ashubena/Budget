@@ -14,6 +14,7 @@ struct CategoryEditView: View {
     @State private var newKeywordText: String = ""
     @State private var showingDeleteConfirm = false
     @State private var error: String? = nil
+    @State private var editingTransaction: Transaction? = nil
 
     // Keep the originals so we can reset / detect dirty state
     @State private var originalName: String = ""
@@ -41,12 +42,15 @@ struct CategoryEditView: View {
             nameSection
             keywordsSection
             aliasesSection
-            statsSection
+            transactionsSection
             deleteSection
 
             if let error {
                 Section { Text(error).foregroundStyle(.red) }
             }
+        }
+        .sheet(item: $editingTransaction) { txn in
+            EditTransactionSheet(transaction: txn)
         }
         .navigationTitle(originalName.isEmpty ? "Category" : originalName)
         #if os(iOS)
@@ -146,13 +150,61 @@ struct CategoryEditView: View {
         }
     }
 
-    private var statsSection: some View {
-        Section("Usage") {
-            LabeledContent("Transactions") {
-                Text("\(transactionCount)")
-                    .font(.body.monospacedDigit())
+    @ViewBuilder
+    private var transactionsSection: some View {
+        let txns = (category.transactions ?? [])
+            .filter { !$0.isVoided }
+            .sorted(by: { $0.occurredAt > $1.occurredAt })
+        Section {
+            if txns.isEmpty {
+                Text("No transactions yet.")
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+            } else {
+                ForEach(txns) { txn in
+                    transactionRow(txn)
+                }
+            }
+        } header: {
+            Text("Transactions (\(txns.count))")
+        } footer: {
+            if !txns.isEmpty {
+                Text("Tap a transaction to change its category, edit the amount, or void it.")
+                    .font(.caption)
             }
         }
+    }
+
+    private func transactionRow(_ txn: Transaction) -> some View {
+        Button {
+            editingTransaction = txn
+        } label: {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(txn.rawInput ?? "—")
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(txn.occurredAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(signedAmount(for: txn))
+                    .font(.body.monospacedDigit())
+                    .foregroundStyle(txn.direction == .inflow ? Color.green : Color.primary)
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func signedAmount(for txn: Transaction) -> String {
+        let prefix = (txn.direction == .outflow) ? "-" : "+"
+        return prefix + TransactionService.formatPKR(txn.amount)
     }
 
     private var deleteSection: some View {

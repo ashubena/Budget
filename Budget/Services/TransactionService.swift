@@ -104,7 +104,7 @@ struct TransactionService {
             message = line
         } else {
             let frag = fragment.isEmpty ? "?" : "\"\(fragment)\""
-            message = "Logged \(amountStr) — what's \(frag)?\n(Reply with a category name; I'll remember it.)"
+            message = "Logged \(amountStr) — pick a category for \(frag)…"
         }
 
         return LogResult(

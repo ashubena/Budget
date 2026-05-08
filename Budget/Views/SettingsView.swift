@@ -19,6 +19,11 @@ struct SettingsView: View {
     @Query(sort: \Loan.startDate, order: .reverse)
     private var loans: [Loan]
 
+    @Query(filter: #Predicate<Transaction> { !$0.isVoided })
+    private var allTransactions: [Transaction]
+
+    private var transactionsCount: Int { allTransactions.count }
+
     @State private var showingResetConfirm = false
     @State private var showingExporter = false
     @State private var exportContent = ""
@@ -41,6 +46,7 @@ struct SettingsView: View {
                 } label: {
                     Label("Recent transactions", systemImage: "list.bullet.rectangle")
                 }
+                .badge(transactionsCount)
             }
 
             // ─── Loans ───
@@ -78,25 +84,14 @@ struct SettingsView: View {
 
             // ─── Categories ───
             Section {
-                ForEach(categories) { cat in
-                    NavigationLink {
-                        CategoryEditView(category: cat)
-                    } label: {
-                        HStack {
-                            Image(systemName: cat.kind == .income ? "arrow.down.circle" : "arrow.up.circle")
-                                .foregroundStyle(cat.kind == .income ? Color.green : Color.secondary)
-                            Text(cat.name)
-                            Spacer()
-                            Text("\(cat.transactions?.count ?? 0)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                NavigationLink {
+                    CategoriesListView()
+                } label: {
+                    Label("Manage categories", systemImage: "tag")
                 }
-            } header: {
-                Text("Categories")
+                .badge(categories.count)
             } footer: {
-                Text("Tap to edit name, manage keywords, or delete.")
+                Text("Edit names, manage keywords, add or delete.")
                     .font(.caption)
             }
 

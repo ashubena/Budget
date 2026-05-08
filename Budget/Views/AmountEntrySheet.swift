@@ -54,6 +54,9 @@ struct AmountEntrySheet: View {
                 }
             }
         }
+        #if os(macOS)
+        .frame(minWidth: 380, idealWidth: 420, minHeight: 320, idealHeight: 360)
+        #endif
     }
 
     private var title: String {

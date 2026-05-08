@@ -127,6 +127,55 @@ struct EditService {
         try context.save()
     }
 
+    /// Reassign a transaction to a different category (within window).
+    /// Reverses the old bucket allocation (if any) and creates a new one
+    /// for the new category's bucket (if any). Logs an audit row.
+    func updateCategory(of txn: Transaction, to newCategory: Category?, reason: String? = nil) throws {
+        guard !txn.isVoided else { throw EditError.alreadyVoided }
+        let age = Date().timeIntervalSince(txn.occurredAt)
+        if age > Self.editWindow {
+            throw EditError.lockedByWindow(daysOld: Int(age / 86_400))
+        }
+
+        let oldName = txn.category?.name ?? "(uncategorized)"
+        let newName = newCategory?.name ?? "(uncategorized)"
+        if txn.category?.id == newCategory?.id { return }
+
+        // Reverse any existing bucket allocations tied to this transaction.
+        let oldAllocs = txn.allocations ?? []
+        for a in oldAllocs where a.reason == .transaction {
+            if let bucket = a.bucket {
+                bucket.allocatedAmount -= a.amount
+            }
+            context.delete(a)
+        }
+        // Detach from any old bucket pointer too.
+        txn.bucket = nil
+
+        // Apply the new category.
+        txn.category = newCategory
+        txn.needsCategory = (newCategory == nil)
+
+        // Auto-allocate against the new category's bucket if one matches.
+        if newCategory != nil {
+            let bucketService = BucketService(context: context)
+            _ = try bucketService.recordTransactionAllocation(transaction: txn)
+        }
+
+        let audit = TransactionAudit(
+            transaction: txn,
+            changeType: .edit,
+            fieldChanged: "category",
+            oldValue: oldName,
+            newValue: newName,
+            reason: reason
+        )
+        context.insert(audit)
+        txn.modifiedAt = Date()
+
+        try context.save()
+    }
+
     /// Update the amount of an existing transaction (within window).
     /// Reverses the difference on account balance + bucket allocation.
     func updateAmount(of txn: Transaction, to newAmount: Decimal, reason: String? = nil) throws {

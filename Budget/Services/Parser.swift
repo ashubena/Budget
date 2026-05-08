@@ -72,6 +72,11 @@ enum Parser {
             return .voidLast
         }
 
+        // Tier 0.5 — explicit sign prefix: "+1000 freelance" / "-500 food"
+        if let result = parseSignedShorthand(tokens: tokens) {
+            return result
+        }
+
         // Tier 3 — loans
         if let result = try parseLoan(tokens: tokens, lowerTokens: lowerTokens) {
             return result
@@ -84,6 +89,36 @@ enum Parser {
 
         // Tier 1 — default expense
         return try parseExpense(tokens: tokens, lowerTokens: lowerTokens, raw: trimmed)
+    }
+
+    // MARK: - Tier 0.5: sign prefix shorthand
+
+    /// "+1000 freelance" → income, "-500 food" → expense.
+    /// Sign must lead the first token; rest of token must parse as a number.
+    /// Returns nil if no sign prefix or amount unparseable.
+    private static func parseSignedShorthand(tokens: [String]) -> ParseResult? {
+        guard let first = tokens.first else { return nil }
+        let direction: Direction
+        let stripped: String
+        if first.hasPrefix("+") {
+            direction = .inflow
+            stripped = String(first.dropFirst())
+        } else if first.hasPrefix("-") {
+            direction = .outflow
+            stripped = String(first.dropFirst())
+        } else {
+            return nil
+        }
+        guard !stripped.isEmpty, let amount = parseAmountToken(stripped) else { return nil }
+
+        var rest = tokens
+        rest.removeFirst()
+        let fragment = rest.joined(separator: " ").lowercased()
+
+        switch direction {
+        case .inflow:  return .income(amount: amount, fragment: fragment)
+        case .outflow: return .expense(amount: amount, fragment: fragment)
+        }
     }
 
     // MARK: - Tier 1: expense

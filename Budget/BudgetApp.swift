@@ -21,7 +21,14 @@ struct BudgetApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+            #if os(macOS)
+                .frame(minWidth: 360, minHeight: 480)
+            #endif
         }
         .modelContainer(sharedModelContainer)
+        #if os(macOS)
+        .defaultSize(width: 480, height: 720)
+        .windowResizability(.contentMinSize)
+        #endif
     }
 }
