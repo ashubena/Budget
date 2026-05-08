@@ -49,6 +49,7 @@ struct CategoryEditView: View {
                 Section { Text(error).foregroundStyle(.red) }
             }
         }
+        .scrollIndicators(.visible)
         .sheet(item: $editingTransaction) { txn in
             EditTransactionSheet(transaction: txn)
         }

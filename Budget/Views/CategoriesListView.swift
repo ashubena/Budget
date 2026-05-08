@@ -22,6 +22,7 @@ struct CategoriesListView: View {
 
     var body: some View {
         listContent
+            .scrollIndicators(.visible)
             .navigationTitle("Categories")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)

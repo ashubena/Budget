@@ -8,7 +8,7 @@ struct BucketsView: View {
     @Environment(\.modelContext) private var context
 
     @Query(
-        filter: #Predicate<Bucket> { !$0.isDeleted && $0.kindRaw != "savingsGoal" },
+        filter: #Predicate<Bucket> { !$0.isDeleted },
         sort: [SortDescriptor(\Bucket.displayOrder), SortDescriptor(\Bucket.name)]
     )
     private var buckets: [Bucket]
@@ -51,6 +51,7 @@ struct BucketsView: View {
             }
             .padding()
         }
+        .scrollIndicators(.visible)
         .navigationTitle("Plan")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

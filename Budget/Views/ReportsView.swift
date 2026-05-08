@@ -89,6 +89,7 @@ struct ReportsView: View {
             }
             .padding()
         }
+        .scrollIndicators(.visible)
         .navigationTitle("Reports")
     }
 

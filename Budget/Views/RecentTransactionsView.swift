@@ -31,6 +31,7 @@ struct RecentTransactionsView: View {
                     }
             }
         }
+        .scrollIndicators(.visible)
         .navigationTitle("Recent")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
