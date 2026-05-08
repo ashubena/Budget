@@ -5,49 +5,99 @@ import Charts
 /// Reports tab — pie chart of actual expenses (or income) per category
 /// over a chosen time range. Reality layer only — reports on transactions,
 /// not bucket allocations.
+///
+/// Scalability: the filter (date range + direction + voided) is pushed
+/// into a child view's `@Query` predicate so SwiftData fetches only the
+/// matching rows instead of loading the entire transaction history into
+/// memory and filtering in Swift.
 struct ReportsView: View {
-    @Environment(\.modelContext) private var context
+    @State private var range: ReportRange = .month
+    @State private var directionFilter: ReportDirection = .expenses
 
-    enum Range: String, CaseIterable, Identifiable {
-        case week = "Week"
-        case month = "Month"
-        case year = "Year"
-        case all = "All"
-        var id: String { rawValue }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                filtersBar
+                Divider()
+
+                FilteredReport(range: range, direction: directionFilter)
+                    // Force a fresh @Query when filters change
+                    .id("\(range.rawValue)-\(directionFilter.rawValue)")
+            }
+            .padding()
+        }
+        .scrollIndicators(.visible)
+        .navigationTitle("Reports")
     }
 
-    enum DirectionFilter: String, CaseIterable, Identifiable {
-        case expenses = "Expenses"
-        case income = "Income"
-        var id: String { rawValue }
+    private var filtersBar: some View {
+        VStack(spacing: 8) {
+            Picker("", selection: $range) {
+                ForEach(ReportRange.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+
+            Picker("", selection: $directionFilter) {
+                ForEach(ReportDirection.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
     }
+}
 
-    @State private var range: Range = .month
-    @State private var directionFilter: DirectionFilter = .expenses
+// MARK: - Filter enums (top-level so the child view can use them in its init)
 
-    @Query(
-        filter: #Predicate<Transaction> { !$0.isVoided },
-        sort: \Transaction.occurredAt
-    )
-    private var allTransactions: [Transaction]
+enum ReportRange: String, CaseIterable, Identifiable {
+    case week = "Week"
+    case month = "Month"
+    case year = "Year"
+    case all = "All"
+    var id: String { rawValue }
 
-    private var startDate: Date {
+    func startDate(from now: Date = Date()) -> Date {
         let cal = Calendar.current
-        let now = Date()
-        switch range {
+        switch self {
         case .week:  return cal.date(byAdding: .day, value: -7, to: now) ?? now
         case .month: return cal.dateInterval(of: .month, for: now)?.start ?? now
         case .year:  return cal.dateInterval(of: .year, for: now)?.start ?? now
         case .all:   return .distantPast
         }
     }
+}
 
-    private var filtered: [Transaction] {
-        let dirRaw = (directionFilter == .expenses) ? Direction.outflow.rawValue : Direction.inflow.rawValue
-        let cutoff = startDate
-        return allTransactions.filter {
-            $0.occurredAt >= cutoff && $0.directionRaw == dirRaw
+enum ReportDirection: String, CaseIterable, Identifiable {
+    case expenses = "Expenses"
+    case income = "Income"
+    var id: String { rawValue }
+
+    var directionRaw: String {
+        switch self {
+        case .expenses: return Direction.outflow.rawValue
+        case .income:   return Direction.inflow.rawValue
         }
+    }
+}
+
+// MARK: - Filtered child
+
+/// Has its own @Query whose predicate is built from the params at init.
+/// Rebuilt by the parent (via .id) when the filters change.
+private struct FilteredReport: View {
+    @Query private var transactions: [Transaction]
+    private let direction: ReportDirection
+
+    init(range: ReportRange, direction: ReportDirection) {
+        self.direction = direction
+        let cutoff = range.startDate()
+        let dirRaw = direction.directionRaw
+        _transactions = Query(
+            filter: #Predicate<Transaction> {
+                !$0.isVoided
+                    && $0.occurredAt >= cutoff
+                    && $0.directionRaw == dirRaw
+            },
+            sort: \Transaction.occurredAt
+        )
     }
 
     private struct CategoryTotal: Identifiable {
@@ -58,7 +108,7 @@ struct ReportsView: View {
     }
 
     private var totalsByCategory: [CategoryTotal] {
-        let groups = Dictionary(grouping: filtered) { $0.category?.name ?? "Uncategorized" }
+        let groups = Dictionary(grouping: transactions) { $0.category?.name ?? "Uncategorized" }
         return groups.map { (name, txns) in
             CategoryTotal(
                 name: name,
@@ -70,54 +120,30 @@ struct ReportsView: View {
     }
 
     private var grandTotal: Decimal {
-        filtered.map(\.amount).reduce(Decimal(0), +)
+        transactions.map(\.amount).reduce(Decimal(0), +)
     }
 
     var body: some View {
-        ScrollView {
+        if transactions.isEmpty {
+            emptyState
+        } else {
             VStack(alignment: .leading, spacing: 16) {
-                filtersBar
-                Divider()
-
-                if filtered.isEmpty {
-                    emptyState
-                } else {
-                    summaryHeader
-                    chart
-                    legend
-                }
+                summaryHeader
+                chart
+                legend
             }
-            .padding()
-        }
-        .scrollIndicators(.visible)
-        .navigationTitle("Reports")
-    }
-
-    // MARK: - Pieces
-
-    private var filtersBar: some View {
-        VStack(spacing: 8) {
-            Picker("", selection: $range) {
-                ForEach(Range.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-
-            Picker("", selection: $directionFilter) {
-                ForEach(DirectionFilter.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
         }
     }
 
     private var summaryHeader: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(directionFilter == .expenses ? "TOTAL SPENT" : "TOTAL EARNED")
+            Text(direction == .expenses ? "TOTAL SPENT" : "TOTAL EARNED")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .tracking(1.5)
             Text(TransactionService.formatPKR(grandTotal))
                 .font(.system(size: 28, weight: .bold))
-            Text("\(filtered.count) transactions")
+            Text("\(transactions.count) transactions")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -160,7 +186,7 @@ struct ReportsView: View {
             Image(systemName: "chart.pie")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
-            Text("No \(directionFilter.rawValue.lowercased()) in this range")
+            Text("No \(direction.rawValue.lowercased()) in this range")
                 .font(.headline)
             Text("Log something on the Chat tab.")
                 .foregroundStyle(.secondary)

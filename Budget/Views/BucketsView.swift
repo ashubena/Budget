@@ -73,10 +73,10 @@ struct BucketsView: View {
             AmountEntrySheet(bucket: req.bucket, direction: req.direction)
         }
         .sheet(isPresented: $showAddSheet) {
-            AddBucketSheet()
+            BucketSheet()
         }
         .sheet(item: $editingBucket) { b in
-            EditBucketSheet(bucket: b)
+            BucketSheet(editing: b)
         }
         .confirmationDialog(
             pendingDelete.map { "Delete \($0.name)?" } ?? "",

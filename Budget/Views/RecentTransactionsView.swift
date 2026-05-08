@@ -225,9 +225,7 @@ struct EditTransactionSheet: View {
                 selectedCategoryID = transaction.category?.id
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 420, idealWidth: 480, minHeight: 520, idealHeight: 600)
-        #endif
+        .macOSSheetSize(.tall)
     }
 
     @ViewBuilder
