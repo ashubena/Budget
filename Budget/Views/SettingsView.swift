@@ -30,7 +30,7 @@ struct SettingsView: View {
     @State private var exportError: String? = nil
 
     var body: some View {
-        Form {
+        List {
             // ─── Account ───
             Section("Account") {
                 if let account = accounts.first {

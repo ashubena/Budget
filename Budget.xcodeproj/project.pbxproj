@@ -394,6 +394,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Used to record your voice when logging expenses.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Transcribes your voice into text so the parser can log it.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -438,6 +439,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Used to record your voice when logging expenses.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Transcribes your voice into text so the parser can log it.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
