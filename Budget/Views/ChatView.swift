@@ -67,6 +67,7 @@ struct ChatView: View {
                 }
                 .padding()
             }
+            .scrollIndicators(.visible)
             .onChange(of: messages.count) {
                 if let last = messages.last {
                     withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }

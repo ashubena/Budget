@@ -22,6 +22,7 @@ struct CategoriesListView: View {
 
     var body: some View {
         listContent
+            .scrollIndicators(.visible)
             .navigationTitle("Categories")
             #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -184,9 +185,7 @@ struct AddCategorySheet: View {
                 }
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 380, idealWidth: 420, minHeight: 320, idealHeight: 360)
-        #endif
+        .macOSSheetSize(.compact)
     }
 
     private func create() {

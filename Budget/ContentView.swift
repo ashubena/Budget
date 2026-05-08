@@ -26,13 +26,6 @@ struct ContentView: View {
             }
 
             NavigationStack {
-                GoalsView()
-            }
-            .tabItem {
-                Label("Goals", systemImage: "target")
-            }
-
-            NavigationStack {
                 ReportsView()
             }
             .tabItem {

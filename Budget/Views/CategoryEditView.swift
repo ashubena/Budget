@@ -49,6 +49,7 @@ struct CategoryEditView: View {
                 Section { Text(error).foregroundStyle(.red) }
             }
         }
+        .scrollIndicators(.visible)
         .sheet(item: $editingTransaction) { txn in
             EditTransactionSheet(transaction: txn)
         }
@@ -150,61 +151,11 @@ struct CategoryEditView: View {
         }
     }
 
-    @ViewBuilder
     private var transactionsSection: some View {
-        let txns = (category.transactions ?? [])
-            .filter { !$0.isVoided }
-            .sorted(by: { $0.occurredAt > $1.occurredAt })
-        Section {
-            if txns.isEmpty {
-                Text("No transactions yet.")
-                    .foregroundStyle(.secondary)
-                    .font(.callout)
-            } else {
-                ForEach(txns) { txn in
-                    transactionRow(txn)
-                }
-            }
-        } header: {
-            Text("Transactions (\(txns.count))")
-        } footer: {
-            if !txns.isEmpty {
-                Text("Tap a transaction to change its category, edit the amount, or void it.")
-                    .font(.caption)
-            }
-        }
-    }
-
-    private func transactionRow(_ txn: Transaction) -> some View {
-        Button {
-            editingTransaction = txn
-        } label: {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(txn.rawInput ?? "—")
-                        .font(.body)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Text(txn.occurredAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Text(signedAmount(for: txn))
-                    .font(.body.monospacedDigit())
-                    .foregroundStyle(txn.direction == .inflow ? Color.green : Color.primary)
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func signedAmount(for txn: Transaction) -> String {
-        let prefix = (txn.direction == .outflow) ? "-" : "+"
-        return prefix + TransactionService.formatPKR(txn.amount)
+        CategoryTransactionsSection(
+            category: category,
+            onTap: { editingTransaction = $0 }
+        )
     }
 
     private var deleteSection: some View {
@@ -298,5 +249,81 @@ struct CategoryEditView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+// MARK: - Transactions section (lazy via @Query)
+
+/// Lists the transactions for a single category. Uses its own @Query with
+/// a predicate filtering by category ID so SwiftData fetches just the
+/// matching rows, sorted by date desc — instead of loading all of
+/// `category.transactions` into memory and sorting in Swift.
+private struct CategoryTransactionsSection: View {
+    @Query private var transactions: [Transaction]
+    let onTap: (Transaction) -> Void
+
+    init(category: Category, onTap: @escaping (Transaction) -> Void) {
+        self.onTap = onTap
+        let catID = category.id
+        _transactions = Query(
+            filter: #Predicate<Transaction> {
+                !$0.isVoided && $0.category?.id == catID
+            },
+            sort: \Transaction.occurredAt,
+            order: .reverse
+        )
+    }
+
+    var body: some View {
+        Section {
+            if transactions.isEmpty {
+                Text("No transactions yet.")
+                    .foregroundStyle(.secondary)
+                    .font(.callout)
+            } else {
+                ForEach(transactions) { txn in
+                    row(txn)
+                }
+            }
+        } header: {
+            Text("Transactions (\(transactions.count))")
+        } footer: {
+            if !transactions.isEmpty {
+                Text("Tap a transaction to change its category, edit the amount, or void it.")
+                    .font(.caption)
+            }
+        }
+    }
+
+    private func row(_ txn: Transaction) -> some View {
+        Button {
+            onTap(txn)
+        } label: {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(txn.rawInput ?? "—")
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(txn.occurredAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(signedAmount(for: txn))
+                    .font(.body.monospacedDigit())
+                    .foregroundStyle(txn.direction == .inflow ? Color.green : Color.primary)
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func signedAmount(for txn: Transaction) -> String {
+        let prefix = (txn.direction == .outflow) ? "-" : "+"
+        return prefix + TransactionService.formatPKR(txn.amount)
     }
 }

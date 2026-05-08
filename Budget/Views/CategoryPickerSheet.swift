@@ -118,9 +118,7 @@ struct CategoryPickerSheet: View {
                 }
             }
         }
-        #if os(macOS)
-        .frame(minWidth: 420, idealWidth: 460, minHeight: 520, idealHeight: 600)
-        #endif
+        .macOSSheetSize(.tall)
     }
 
     // MARK: - Row builder

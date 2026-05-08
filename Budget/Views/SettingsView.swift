@@ -19,10 +19,12 @@ struct SettingsView: View {
     @Query(sort: \Loan.startDate, order: .reverse)
     private var loans: [Loan]
 
-    @Query(filter: #Predicate<Transaction> { !$0.isVoided })
-    private var allTransactions: [Transaction]
-
-    private var transactionsCount: Int { allTransactions.count }
+    /// Refreshed on tab appear via `.task` below — uses `fetchCount` so the
+    /// rows themselves never get materialized just to display this badge.
+    /// Trade-off: doesn't reactively update if a transaction is added while
+    /// Settings is already on screen. Acceptable; user re-enters Settings to
+    /// see fresh count.
+    @State private var transactionsCount: Int = 0
 
     @State private var showingResetConfirm = false
     @State private var showingExporter = false
@@ -30,7 +32,7 @@ struct SettingsView: View {
     @State private var exportError: String? = nil
 
     var body: some View {
-        Form {
+        List {
             // ─── Account ───
             Section("Account") {
                 if let account = accounts.first {
@@ -123,7 +125,12 @@ struct SettingsView: View {
                     .font(.caption)
             }
         }
+        .scrollIndicators(.visible)
         .navigationTitle("Settings")
+        .task {
+            let descriptor = FetchDescriptor<Transaction>(predicate: #Predicate { !$0.isVoided })
+            transactionsCount = (try? context.fetchCount(descriptor)) ?? 0
+        }
         .confirmationDialog(
             "Reset everything?",
             isPresented: $showingResetConfirm,

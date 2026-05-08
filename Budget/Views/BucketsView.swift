@@ -8,7 +8,7 @@ struct BucketsView: View {
     @Environment(\.modelContext) private var context
 
     @Query(
-        filter: #Predicate<Bucket> { !$0.isDeleted && $0.kindRaw != "savingsGoal" },
+        filter: #Predicate<Bucket> { !$0.isDeleted },
         sort: [SortDescriptor(\Bucket.displayOrder), SortDescriptor(\Bucket.name)]
     )
     private var buckets: [Bucket]
@@ -22,6 +22,8 @@ struct BucketsView: View {
 
     @State private var amountRequest: AmountRequest? = nil
     @State private var showAddSheet = false
+    @State private var editingBucket: Bucket? = nil
+    @State private var pendingDelete: Bucket? = nil
 
     private var unallocated: Decimal {
         let totalCash = accounts.map(\.realBalance).reduce(Decimal(0), +)
@@ -42,15 +44,21 @@ struct BucketsView: View {
                         spacing: 12
                     ) {
                         ForEach(buckets) { bucket in
-                            BucketCard(bucket: bucket) { direction in
-                                amountRequest = AmountRequest(bucket: bucket, direction: direction)
-                            }
+                            BucketCard(
+                                bucket: bucket,
+                                onAdjust: { dir in
+                                    amountRequest = AmountRequest(bucket: bucket, direction: dir)
+                                },
+                                onEdit: { editingBucket = bucket },
+                                onDelete: { pendingDelete = bucket }
+                            )
                         }
                     }
                 }
             }
             .padding()
         }
+        .scrollIndicators(.visible)
         .navigationTitle("Plan")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -65,7 +73,33 @@ struct BucketsView: View {
             AmountEntrySheet(bucket: req.bucket, direction: req.direction)
         }
         .sheet(isPresented: $showAddSheet) {
-            AddBucketSheet()
+            BucketSheet()
+        }
+        .sheet(item: $editingBucket) { b in
+            BucketSheet(editing: b)
+        }
+        .confirmationDialog(
+            pendingDelete.map { "Delete \($0.name)?" } ?? "",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let b = pendingDelete {
+                    let service = BucketService(context: context)
+                    try? service.softDelete(b)
+                }
+                pendingDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDelete = nil
+            }
+        } message: {
+            if let b = pendingDelete {
+                Text("Allocation history is kept. \"\(b.name)\" disappears from the canvas.")
+            }
         }
     }
 
@@ -119,6 +153,8 @@ struct AmountRequest: Identifiable {
 struct BucketCard: View {
     let bucket: Bucket
     let onAdjust: (AmountRequest.Adjustment) -> Void
+    var onEdit: (() -> Void)? = nil
+    var onDelete: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -167,6 +203,18 @@ struct BucketCard: View {
         .overlay(
             RoundedRectangle(cornerRadius: 12).stroke(borderColor, lineWidth: 1.5)
         )
+        .contextMenu {
+            if let onEdit {
+                Button { onEdit() } label: {
+                    Label("Edit bucket", systemImage: "pencil")
+                }
+            }
+            if let onDelete {
+                Button(role: .destructive) { onDelete() } label: {
+                    Label("Delete bucket", systemImage: "trash")
+                }
+            }
+        }
     }
 
     private var amountColor: Color {
