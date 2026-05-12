@@ -81,27 +81,15 @@ struct TransactionService {
 
         try context.save()
 
-        // Auto-allocate to matching bucket (intent layer wiring).
-        let bucketService = BucketService(context: context)
-        let bucket = try bucketService.recordTransactionAllocation(transaction: txn)
-
         let amountStr = Self.formatPKR(amount)
         let balanceStr = Self.formatPKR(account.realBalance)
         let message: String
         if let cat = category {
             let extra = (fragment.isEmpty || fragment == cat.name.lowercased()) ? "" : " (\(fragment))"
-            var line = "Logged \(amountStr) on \(cat.name)\(extra)."
-            if let bucket {
-                line += "\n\(bucket.name): \(Self.formatPKR(bucket.allocatedAmount))"
-                if let planned = bucket.plannedAmount {
-                    line += " / \(Self.formatPKR(planned))"
-                }
-                if bucket.allocatedAmount < 0 {
-                    line += "  ⚠ over by \(Self.formatPKR(-bucket.allocatedAmount))"
-                }
-            }
-            line += "\nBalance: \(balanceStr)"
-            message = line
+            // Bucket display is now derived in BucketCard's @Query; we
+            // don't compute a per-bucket spent here because it would mean
+            // an extra fetch per chat message. Just confirm the log.
+            message = "Logged \(amountStr) on \(cat.name)\(extra).\nBalance: \(balanceStr)"
         } else {
             let frag = fragment.isEmpty ? "?" : "\"\(fragment)\""
             message = "Logged \(amountStr) — pick a category for \(frag)…"

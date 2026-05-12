@@ -91,25 +91,9 @@ struct EditService {
             loan.status = (loan.currentBalance == 0) ? .paid : .active
         }
 
-        // Reverse any bucket allocations tied to this transaction.
-        let allocs = txn.allocations ?? []
-        for a in allocs {
-            if let bucket = a.bucket {
-                bucket.allocatedAmount -= a.amount
-            }
-            // Insert a paired reversal allocation for the audit trail
-            if let bucket = a.bucket {
-                let reversal = Allocation(
-                    bucket: bucket,
-                    amount: -a.amount,
-                    reason: .editCorrection,
-                    transaction: txn,
-                    occurredAt: Date(),
-                    note: "void of \(txn.id.uuidString.prefix(8))"
-                )
-                context.insert(reversal)
-            }
-        }
+        // No bucket-allocation reversal: bucket spent is now derived from
+        // (non-voided) transactions in BucketCard's @Query. Marking the
+        // transaction voided automatically excludes it from those queries.
 
         // Mark voided + audit.
         txn.isVoided = true
@@ -141,26 +125,12 @@ struct EditService {
         let newName = newCategory?.name ?? "(uncategorized)"
         if txn.category?.id == newCategory?.id { return }
 
-        // Reverse any existing bucket allocations tied to this transaction.
-        let oldAllocs = txn.allocations ?? []
-        for a in oldAllocs where a.reason == .transaction {
-            if let bucket = a.bucket {
-                bucket.allocatedAmount -= a.amount
-            }
-            context.delete(a)
-        }
-        // Detach from any old bucket pointer too.
-        txn.bucket = nil
-
-        // Apply the new category.
+        // No bucket re-allocation: bucket spent is derived from
+        // (non-voided) transactions matching the bucket's linkedCategory
+        // in the current period. Reassigning the transaction's category
+        // automatically moves it between bucket queries on next render.
         txn.category = newCategory
         txn.needsCategory = (newCategory == nil)
-
-        // Auto-allocate against the new category's bucket if one matches.
-        if newCategory != nil {
-            let bucketService = BucketService(context: context)
-            _ = try bucketService.recordTransactionAllocation(transaction: txn)
-        }
 
         let audit = TransactionAudit(
             transaction: txn,
@@ -196,16 +166,9 @@ struct EditService {
             }
         }
 
-        // Adjust bucket allocations — for outflow, increasing amount means bucket goes more negative.
-        let allocs = txn.allocations ?? []
-        for a in allocs {
-            if let bucket = a.bucket {
-                let allocDelta: Decimal = (txn.direction == .outflow) ? -delta : delta
-                bucket.allocatedAmount += allocDelta
-                // Update the original allocation's amount to reflect new state.
-                a.amount += allocDelta
-            }
-        }
+        // No bucket-allocation adjustment: bucket spent is derived from
+        // the transaction's (now-updated) amount on next render of
+        // BucketCard's @Query.
 
         let audit = TransactionAudit(
             transaction: txn,

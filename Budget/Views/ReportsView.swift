@@ -14,9 +14,18 @@ struct ReportsView: View {
     @State private var range: ReportRange = .month
     @State private var directionFilter: ReportDirection = .expenses
 
+    @Query(filter: #Predicate<Account> { $0.isActive })
+    private var accounts: [Account]
+
+    private var totalBalance: Decimal {
+        accounts.map(\.realBalance).reduce(Decimal(0), +)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                balanceHeader
+                Divider()
                 filtersBar
                 Divider()
 
@@ -28,6 +37,19 @@ struct ReportsView: View {
         }
         .scrollIndicators(.visible)
         .navigationTitle("Reports")
+    }
+
+    private var balanceHeader: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("BALANCE")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .tracking(1.5)
+            Text(TransactionService.formatPKR(totalBalance))
+                .font(.system(size: 32, weight: .bold))
+                .foregroundStyle(totalBalance < 0 ? Color.red : Color.primary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var filtersBar: some View {

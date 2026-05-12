@@ -19,13 +19,6 @@ struct ContentView: View {
             }
 
             NavigationStack {
-                BucketsView()
-            }
-            .tabItem {
-                Label("Plan", systemImage: "rectangle.grid.2x2.fill")
-            }
-
-            NavigationStack {
                 ReportsView()
             }
             .tabItem {
