@@ -104,9 +104,15 @@ enum ReportDirection: String, CaseIterable, Identifiable {
 
 /// Has its own @Query whose predicate is built from the params at init.
 /// Rebuilt by the parent (via .id) when the filters change.
+///
+/// `disabledCategories` is local @State — toggling a legend row adds/removes
+/// the category from this set. The pie chart, the summary header, and the
+/// legend's row order are all derived from it.
 private struct FilteredReport: View {
     @Query private var transactions: [Transaction]
     private let direction: ReportDirection
+
+    @State private var disabledCategories: Set<String> = []
 
     init(range: ReportRange, direction: ReportDirection) {
         self.direction = direction
@@ -129,6 +135,7 @@ private struct FilteredReport: View {
         let count: Int
     }
 
+    /// All categories with totals, sorted by amount desc.
     private var totalsByCategory: [CategoryTotal] {
         let groups = Dictionary(grouping: transactions) { $0.category?.name ?? "Uncategorized" }
         return groups.map { (name, txns) in
@@ -141,8 +148,34 @@ private struct FilteredReport: View {
         .sorted { $0.amount > $1.amount }
     }
 
+    /// Categories currently included in the pie + summary.
+    private var enabledTotals: [CategoryTotal] {
+        totalsByCategory.filter { !disabledCategories.contains($0.name) }
+    }
+
+    /// Categories the user has toggled off; shown greyed at the bottom of the legend.
+    private var disabledTotals: [CategoryTotal] {
+        totalsByCategory.filter { disabledCategories.contains($0.name) }
+    }
+
+    /// Header reflects what's visible in the pie, not the raw query result.
     private var grandTotal: Decimal {
-        transactions.map(\.amount).reduce(Decimal(0), +)
+        enabledTotals.map(\.amount).reduce(Decimal(0), +)
+    }
+
+    private var enabledTransactionCount: Int {
+        enabledTotals.map(\.count).reduce(0, +)
+    }
+
+    /// Toggle a category. Refuses to disable the last enabled one — at least
+    /// one category must remain in the pie at all times.
+    private func toggle(_ name: String) {
+        if disabledCategories.contains(name) {
+            disabledCategories.remove(name)
+        } else if enabledTotals.count > 1 {
+            disabledCategories.insert(name)
+        }
+        // else: would leave zero enabled — silently ignore
     }
 
     var body: some View {
@@ -165,14 +198,14 @@ private struct FilteredReport: View {
                 .tracking(1.5)
             Text(TransactionService.formatPKR(grandTotal))
                 .font(.system(size: 28, weight: .bold))
-            Text("\(transactions.count) transactions")
+            Text("\(enabledTransactionCount) transactions")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
     }
 
     private var chart: some View {
-        Chart(totalsByCategory) { item in
+        Chart(enabledTotals) { item in
             SectorMark(
                 angle: .value("Amount", NSDecimalNumber(decimal: item.amount).doubleValue),
                 innerRadius: .ratio(0.55),
@@ -183,24 +216,58 @@ private struct FilteredReport: View {
         }
         .frame(height: 280)
         .padding(.vertical, 4)
+        .animation(.easeInOut(duration: 0.25), value: disabledCategories)
     }
 
+    @ViewBuilder
     private var legend: some View {
         VStack(spacing: 0) {
-            ForEach(totalsByCategory) { item in
-                HStack {
-                    Text(item.name)
-                    Spacer()
-                    Text("\(item.count)x")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(TransactionService.formatPKR(item.amount))
-                        .font(.body.monospacedDigit())
+            ForEach(enabledTotals) { item in
+                legendRow(item, isEnabled: true)
+            }
+            if !disabledTotals.isEmpty {
+                Color.clear.frame(height: 8)
+                Text("HIDDEN")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .tracking(1.2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.bottom, 2)
+                ForEach(disabledTotals) { item in
+                    legendRow(item, isEnabled: false)
                 }
-                .padding(.vertical, 6)
-                Divider()
             }
         }
+        .animation(.easeInOut(duration: 0.25), value: disabledCategories)
+    }
+
+    private func legendRow(_ item: CategoryTotal, isEnabled: Bool) -> some View {
+        Button {
+            toggle(item.name)
+        } label: {
+            HStack {
+                Image(systemName: isEnabled ? "circle.fill" : "circle")
+                    .font(.caption2)
+                    .foregroundStyle(isEnabled ? Color.accentColor : Color.secondary)
+                Text(item.name)
+                    .strikethrough(!isEnabled, color: .secondary)
+                Spacer()
+                Text("\(item.count)x")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(TransactionService.formatPKR(item.amount))
+                    .font(.body.monospacedDigit())
+            }
+            .foregroundStyle(isEnabled ? Color.primary : Color.secondary)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+            .opacity(isEnabled ? 1.0 : 0.55)
+        }
+        .buttonStyle(.plain)
+        .background(
+            Divider().offset(y: 16),
+            alignment: .bottomLeading
+        )
     }
 
     private var emptyState: some View {
