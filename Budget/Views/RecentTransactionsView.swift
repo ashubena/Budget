@@ -1,8 +1,6 @@
 import SwiftUI
 import SwiftData
 
-/// Recent transactions list — newest first. Linked from Settings.
-/// Swipe a row to void (within 7-day window). Tap to edit the amount.
 struct RecentTransactionsView: View {
     @Environment(\.modelContext) private var context
 
@@ -69,27 +67,14 @@ struct RecentTransactionsView: View {
     }
 }
 
-// MARK: - Row
-
 private struct RecentTransactionRow: View {
     let transaction: Transaction
-
-    private var isOutsideEditWindow: Bool {
-        Date().timeIntervalSince(transaction.occurredAt) > EditService.editWindow
-    }
 
     var body: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(transaction.category?.name ?? "Uncategorized")
-                        .font(.body)
-                    if isOutsideEditWindow {
-                        Image(systemName: "lock.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                Text(transaction.category?.name ?? "Uncategorized")
+                    .font(.body)
                 if let raw = transaction.rawInput {
                     Text(raw)
                         .font(.caption)
@@ -117,8 +102,6 @@ private struct RecentTransactionRow: View {
     }
 }
 
-// MARK: - Edit sheet
-
 struct EditTransactionSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -131,15 +114,10 @@ struct EditTransactionSheet: View {
     @State private var selectedCategoryID: UUID? = nil
     @State private var error: String? = nil
 
-    private var isOutsideWindow: Bool {
-        Date().timeIntervalSince(transaction.occurredAt) > EditService.editWindow
-    }
-
     private var parsedAmount: Decimal? {
         Parser.parseAmountToken(amountText.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    /// Match category options to direction: outflow → expense, inflow → income.
     private var pickableCategories: [Category] {
         let kind: CategoryKind = (transaction.direction == .inflow) ? .income : .expense
         return allCategories.filter { $0.kind == kind }
@@ -155,7 +133,6 @@ struct EditTransactionSheet: View {
     }
 
     private var canSave: Bool {
-        guard !isOutsideWindow else { return false }
         if amountChanged { return parsedAmount != nil }
         return categoryChanged
     }
@@ -164,14 +141,10 @@ struct EditTransactionSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    if isOutsideWindow {
-                        LabeledContent("Category", value: transaction.category?.name ?? "—")
-                    } else {
-                        Picker("Category", selection: $selectedCategoryID) {
-                            Text("(uncategorized)").tag(UUID?.none)
-                            ForEach(pickableCategories) { cat in
-                                Text(cat.name).tag(Optional(cat.id))
-                            }
+                    Picker("Category", selection: $selectedCategoryID) {
+                        Text("(uncategorized)").tag(UUID?.none)
+                        ForEach(pickableCategories) { cat in
+                            Text(cat.name).tag(Optional(cat.id))
                         }
                     }
                     LabeledContent("Date",
@@ -182,24 +155,24 @@ struct EditTransactionSheet: View {
                     }
                 }
 
-                if isOutsideWindow {
-                    Section {
-                        Label("Locked — older than 7 days. Add a corrective entry on the Chat tab.",
-                              systemImage: "lock.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                } else {
-                    Section("Edit amount") {
-                        TextField("New amount", text: $amountText)
-                        #if os(iOS)
-                            .keyboardType(.decimalPad)
-                        #endif
-                    }
+                Section("Edit amount") {
+                    TextField("New amount", text: $amountText)
+                    #if os(iOS)
+                        .keyboardType(.decimalPad)
+                    #endif
+                }
 
-                    if let error {
-                        Section {
-                            Text(error).foregroundStyle(.red)
-                        }
+                if let error {
+                    Section {
+                        Text(error).foregroundStyle(.red)
+                    }
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        voidAndDismiss()
+                    } label: {
+                        Label("Void transaction", systemImage: "trash")
                     }
                 }
 
@@ -213,11 +186,9 @@ struct EditTransactionSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
-                if !isOutsideWindow {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") { save() }
-                            .disabled(!canSave)
-                    }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(!canSave)
                 }
             }
             .onAppear {
@@ -262,6 +233,16 @@ struct EditTransactionSheet: View {
             if amountChanged, let newAmount = parsedAmount {
                 try editor.updateAmount(of: transaction, to: newAmount)
             }
+            dismiss()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func voidAndDismiss() {
+        let editor = EditService(context: context)
+        do {
+            try editor.void(transaction)
             dismiss()
         } catch {
             self.error = error.localizedDescription
