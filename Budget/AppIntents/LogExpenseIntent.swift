@@ -33,7 +33,7 @@ struct LogExpenseIntent: AppIntent {
         do {
             let parsed = try Parser.parse(phrase)
             let service = TransactionService(context: context)
-            let result = try service.log(parsed.result, occurredAt: parsed.occurredAt)
+            let result = try service.log(parsed.result, occurredAt: parsed.occurredAt, rawInput: phrase)
             return .result(dialog: IntentDialog(stringLiteral: result.message))
         } catch let err as ParserError {
             return .result(dialog: IntentDialog(stringLiteral: err.localizedDescription))

@@ -17,20 +17,20 @@ struct TransactionService {
 
     // MARK: - Public dispatch
 
-    func log(_ result: ParseResult, occurredAt: Date = Date()) throws -> LogResult {
+    func log(_ result: ParseResult, occurredAt: Date = Date(), rawInput: String? = nil) throws -> LogResult {
         switch result {
         case .expense(let amount, let fragment):
-            return try logExpense(amount: amount, fragment: fragment, raw: nil, occurredAt: occurredAt)
+            return try logExpense(amount: amount, fragment: fragment, raw: rawInput, occurredAt: occurredAt)
         case .income(let amount, let fragment):
-            return try logIncome(amount: amount, fragment: fragment, occurredAt: occurredAt)
+            return try logIncome(amount: amount, fragment: fragment, raw: rawInput, occurredAt: occurredAt)
         case .loanOut(let counterparty, let amount):
-            return try logLoanOut(counterparty: counterparty, amount: amount, occurredAt: occurredAt)
+            return try logLoanOut(counterparty: counterparty, amount: amount, raw: rawInput, occurredAt: occurredAt)
         case .loanIn(let counterparty, let amount):
-            return try logLoanIn(counterparty: counterparty, amount: amount, occurredAt: occurredAt)
+            return try logLoanIn(counterparty: counterparty, amount: amount, raw: rawInput, occurredAt: occurredAt)
         case .loanPaymentIn(let counterparty, let amount):
-            return try logLoanPayment(counterparty: counterparty, amount: amount, incoming: true, occurredAt: occurredAt)
+            return try logLoanPayment(counterparty: counterparty, amount: amount, incoming: true, raw: rawInput, occurredAt: occurredAt)
         case .loanPaymentOut(let counterparty, let amount):
-            return try logLoanPayment(counterparty: counterparty, amount: amount, incoming: false, occurredAt: occurredAt)
+            return try logLoanPayment(counterparty: counterparty, amount: amount, incoming: false, raw: rawInput, occurredAt: occurredAt)
         case .voidLast:
             return try voidLastTransaction()
         }
@@ -105,9 +105,8 @@ struct TransactionService {
 
     // MARK: - Income
 
-    func logIncome(amount: Decimal, fragment: String, occurredAt: Date = Date()) throws -> LogResult {
+    func logIncome(amount: Decimal, fragment: String, raw: String? = nil, occurredAt: Date = Date()) throws -> LogResult {
         let account = try fetchOrCreateMainAccount()
-        // Income defaults to "Salary" if nothing else given.
         let category = try resolveCategory(fragment: fragment, prefer: .income)
             ?? (try? fetchCategory(named: "Salary"))
 
@@ -117,7 +116,7 @@ struct TransactionService {
             direction: .inflow,
             category: category,
             occurredAt: occurredAt,
-            rawInput: nil,
+            rawInput: raw,
             rawFragment: fragment.isEmpty ? nil : fragment,
             needsCategory: category == nil,
             inputMethod: .text
@@ -142,8 +141,7 @@ struct TransactionService {
 
     // MARK: - Loans
 
-    /// I lent someone money. Money goes OUT of the account.
-    func logLoanOut(counterparty: String, amount: Decimal, occurredAt: Date = Date()) throws -> LogResult {
+    func logLoanOut(counterparty: String, amount: Decimal, raw: String? = nil, occurredAt: Date = Date()) throws -> LogResult {
         let account = try fetchOrCreateMainAccount()
         let loan = try fetchOrCreateLoan(counterparty: counterparty, type: .givenOut)
         let category = try? fetchCategory(named: "Loan Out")
@@ -155,6 +153,7 @@ struct TransactionService {
             category: category,
             loan: loan,
             occurredAt: occurredAt,
+            rawInput: raw,
             inputMethod: .text
         )
         context.insert(txn)
@@ -182,8 +181,7 @@ struct TransactionService {
         return LogResult(message: message, needsCategoryFollowUp: false, unresolvedFragment: nil, transactionID: txn.id)
     }
 
-    /// I borrowed money. Money comes IN to the account.
-    func logLoanIn(counterparty: String, amount: Decimal, occurredAt: Date = Date()) throws -> LogResult {
+    func logLoanIn(counterparty: String, amount: Decimal, raw: String? = nil, occurredAt: Date = Date()) throws -> LogResult {
         let account = try fetchOrCreateMainAccount()
         let loan = try fetchOrCreateLoan(counterparty: counterparty, type: .taken)
         let category = try? fetchCategory(named: "Loan In")
@@ -195,6 +193,7 @@ struct TransactionService {
             category: category,
             loan: loan,
             occurredAt: occurredAt,
+            rawInput: raw,
             inputMethod: .text
         )
         context.insert(txn)
@@ -221,12 +220,8 @@ struct TransactionService {
         return LogResult(message: message, needsCategoryFollowUp: false, unresolvedFragment: nil, transactionID: txn.id)
     }
 
-    /// Loan repayment. `incoming = true` means they paid me back.
-    /// `incoming = false` means I paid them back.
-    func logLoanPayment(counterparty: String, amount: Decimal, incoming: Bool, occurredAt: Date = Date()) throws -> LogResult {
+    func logLoanPayment(counterparty: String, amount: Decimal, incoming: Bool, raw: String? = nil, occurredAt: Date = Date()) throws -> LogResult {
         let account = try fetchOrCreateMainAccount()
-        // Find the loan that matches direction. If they're paying me back, the loan
-        // I'm tracking is one I gave out.
         let loanType: LoanType = incoming ? .givenOut : .taken
         let loan = try findLoan(counterparty: counterparty, type: loanType)
 
@@ -240,6 +235,7 @@ struct TransactionService {
             category: category,
             loan: loan,
             occurredAt: occurredAt,
+            rawInput: raw,
             inputMethod: .text
         )
         context.insert(txn)

@@ -166,7 +166,7 @@ struct ChatView: View {
         do {
             let parsed = try Parser.parse(text)
             let service = TransactionService(context: context)
-            let logResult = try service.log(parsed.result, occurredAt: parsed.occurredAt)
+            let logResult = try service.log(parsed.result, occurredAt: parsed.occurredAt, rawInput: text)
             var responseMessage = logResult.message
             if let phrase = parsed.datePhrase {
                 responseMessage += "\n📅 dated: \(phrase)"
